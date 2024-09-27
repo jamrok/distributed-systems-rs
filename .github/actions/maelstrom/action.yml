@@ -1,0 +1,96 @@
+name: Maelstrom Test
+
+description: Runs the Maelstrom Test with the given inputs
+
+inputs:
+  binary:
+    required: false
+    description: "Name of the compiled binary for Maelstrom to use"
+  maelstrom_args:
+    required: true
+    description: "Maelstrom Options"
+  workload:
+    required: true
+    description: "Maelstrom Workload Type"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Add Custom ENV variables
+      id: custom-vars
+      shell: bash
+      run: |
+        # NOTE:
+        # add_env does a `tee` which shows the variables contents.
+        # Make another function called `add_secret_env` that doesn't reveal the contents if needed.
+        add_env() { NAME=$1; shift; VAR=$NAME="$@"; eval export "$VAR"; echo "$VAR" | tee -a "$GITHUB_ENV"; tail -n1 "$GITHUB_ENV"; }
+        add_path() { echo "$1" | tee -a "$GITHUB_PATH"; }
+
+        echo -e "\nSet additional environment variables"
+        add_env BIN_DIR target/release/examples
+        add_env CACHE_KEY "${{ runner.os }}-cargo-challenge-${{ hashFiles('**/Cargo.lock') }}"
+        add_env CHALLENGE_SUCCESS "Everything looks good"
+        add_env JAVA_HOME "$JAVA_HOME_21_X64"
+
+        echo -e "\nAdd additional locations to PATH"
+        add_path "$GITHUB_WORKSPACE/.github/bin"
+        add_path "$JAVA_HOME/bin"
+
+    - name: Install Prerequisites
+      shell: bash
+      run: |
+        sudo apt update
+        sudo apt install gnuplot-nox -Vy
+
+    - name: Install Lein
+      uses: DeLaGuardo/setup-clojure@12.5
+      with:
+        lein: 2.11.2
+
+    - name: Restore cargo cache (if any)
+      uses: actions/cache/restore@v4
+      id: cargo-cache-restore
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ env.CACHE_KEY }}
+
+    - name: Get Version Info
+      shell: bash
+      run: |
+        set -x
+        cargo -V
+        lein -v
+        java -version
+        which maelstrom
+
+    - name: Build Rust Binaries
+      shell: bash
+      run: |
+        cargo build --release --examples
+
+    - name: Save cargo cache data
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ env.CACHE_KEY }}
+
+    - name: Maelstrom
+      shell: bash
+      run: |
+        export BINARY="${{ inputs.binary }}"
+        export WORKLOAD="${{ inputs.workload }}"
+        export BIN="$BIN_DIR/${BINARY:-${WORKLOAD//-/_}}"
+        export MAELSTROM_ARGS="${{ inputs.maelstrom_args }}"
+        set -x
+        maelstrom test -w $WORKLOAD --bin $BIN $MAELSTROM_ARGS | tee $WORKLOAD.log || true
+        tail $WORKLOAD.log | grep -E "$CHALLENGE_SUCCESS?"

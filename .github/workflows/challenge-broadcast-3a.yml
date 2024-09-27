@@ -1,0 +1,32 @@
+name: Broadcast 3a
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    paths:
+      - "**.rs"
+      - "**/Cargo*"
+      - ".github/workflows/challenge*.yml"
+  workflow_dispatch:
+
+# Cancel in-progress jobs or runs for the current workflow (or the fallback run ID)
+# https://docs.github.com/en/actions/using-jobs/using-concurrency#example-using-a-fallback-value
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  challenge-broadcast-3a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Challenge 3a - Single-Node Broadcast
+        uses: ./.github/actions/maelstrom
+        with:
+          binary: broadcast
+          maelstrom_args: "--node-count 1 --time-limit 20 --rate 10"
+          workload: broadcast

@@ -1,0 +1,31 @@
+name: Echo
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    paths:
+      - "**.rs"
+      - "**/Cargo*"
+      - ".github/workflows/challenge*.yml"
+  workflow_dispatch:
+
+# Cancel in-progress jobs or runs for the current workflow (or the fallback run ID)
+# https://docs.github.com/en/actions/using-jobs/using-concurrency#example-using-a-fallback-value
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  challenge-echo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Challenge 1 - Echo
+        uses: ./.github/actions/maelstrom
+        with:
+          maelstrom_args: "--node-count 2 --time-limit 5 --rate 100 --latency 100"
+          workload: echo
